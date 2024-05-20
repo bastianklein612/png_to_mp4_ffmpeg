@@ -16,7 +16,7 @@ class VideoEncoder {
 public:
 	bool setUpEncoder(std::string filename, int width, int height, int fps, int bitrate);
 	bool encodeFromFolder(std::string folder, std::string prefix, int numberOfFrames);
-	bool addFrame();
+	bool addFrame(const uint8_t* src, int src_linesize);
 	bool encodeTestVideo();
 	bool closeEncoder();
 	

@@ -154,8 +154,62 @@ bool VideoEncoder::encodeFromFolder(std::string folder, std::string prefix, int 
     return false;
 }
 
-bool VideoEncoder::addFrame() {
-    return false;
+bool VideoEncoder::addFrame(const uint8_t* data, int src_linesize) {
+    //expects the data to be represented in RGBA format (8888)
+
+    AVFrame* frameRGB = av_frame_alloc();
+    if (!frameRGB) {
+        return false;
+    }
+    frameRGB->width = codec_ctx->width;
+    frameRGB->height = codec_ctx->height;
+    frameRGB->format = AV_PIX_FMT_RGB32;
+    av_frame_get_buffer(frameRGB, 0);
+
+    uint8_t* dst = frameRGB->data[0];
+    int dst_linesize = frameRGB->linesize[0];
+    
+
+    for (int y = 0; y < codec_ctx->height; ++y) {
+        memcpy(dst + y * dst_linesize, data + y * src_linesize, src_linesize);
+    }
+
+    //convert rgb to YUV
+    int numBytes = av_image_get_buffer_size(AV_PIX_FMT_YUV420P, codec_ctx->width, codec_ctx->height, 32);
+    uint8_t* bufferYUV = (uint8_t*)av_malloc(numBytes * sizeof(uint8_t));
+    av_image_fill_arrays(frame->data, frame->linesize, bufferYUV, AV_PIX_FMT_YUV420P, codec_ctx->width, codec_ctx->height, 32);
+
+    SwsContext* sws_ctx_yuv = sws_getContext(codec_ctx->width, codec_ctx->height, AV_PIX_FMT_RGB32,
+        codec_ctx->width, codec_ctx->height, AV_PIX_FMT_YUV420P,
+        SWS_BILINEAR, nullptr, nullptr, nullptr);
+
+    sws_scale(sws_ctx_yuv, frameRGB->data, frameRGB->linesize, 0, codec_ctx->height,
+        frame->data, frame->linesize);
+
+
+    frame->pts = frameNumber;
+    frameNumber++;
+
+    // Send the frame to the encoder
+    if (avcodec_send_frame(codec_ctx, frame) < 0) {
+        fprintf(stderr, "Error sending frame to encoder\n");
+        return false;
+    }
+
+    // Receive the encoded packet
+    while (avcodec_receive_packet(codec_ctx, pkt) == 0) {
+        pkt->stream_index = stream->index;
+        av_packet_rescale_ts(pkt, codec_ctx->time_base, stream->time_base);
+        pkt->pos = -1;
+
+        if (av_interleaved_write_frame(fmt_ctx, pkt) < 0) {
+            fprintf(stderr, "Error writing packet\n");
+            return false;
+        }
+        av_packet_unref(pkt);
+    
+    }
+    return true;
 }
 
 bool VideoEncoder::encodeTestVideo() {
@@ -323,6 +377,7 @@ AVFrame* VideoEncoder::read_png_to_avframe(const char* filename) {
     frameYUV->height = frameRGB->height;
     frameYUV->format = AV_PIX_FMT_YUV420P;
 
+    //convert rgb to YUV
     int numBytes = av_image_get_buffer_size(AV_PIX_FMT_YUV420P, codec_ctx->width, codec_ctx->height, 32);
     uint8_t* bufferYUV = (uint8_t*)av_malloc(numBytes * sizeof(uint8_t));
     av_image_fill_arrays(frameYUV->data, frameYUV->linesize, bufferYUV, AV_PIX_FMT_YUV420P, codec_ctx->width, codec_ctx->height, 32);

@@ -10,14 +10,9 @@ int main() {
     VideoEncoder encoder;
 
     encoder.setUpEncoder(filename, width, height, fps, bit_rate);
+    encoder.encodeTestVideo();
     
-
-    //for (int i = 0; i < 100; i++) {
-    //    encoder.addFrame();
-    //}
-    //encoder.encodeTestVideo();
+    //encoder.encodeFromFolder("T:\\Bastian\\Bilder\\Photon Tracer\\Videos\\", "frame_", 11);
     
-    encoder.encodeFromFolder("T:\\Bastian\\Bilder\\Photon Tracer\\Videos\\", "frame_", 11);
-
     encoder.closeEncoder();
 }
